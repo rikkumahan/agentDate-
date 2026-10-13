@@ -57,7 +57,9 @@ body {
 .fig-idle { animation: breathe 3s ease-in-out infinite; }
 .heart { animation: float-up 2.4s ease-out infinite; }
 .candle { animation: flicker 1.3s ease-in-out infinite; }
+@keyframes dash { to { stroke-dashoffset: -24; } }
+.date-live { stroke-dasharray: 8 4; animation: dash 0.8s linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ring-fill, .animate-pulse, .fig-talk, .fig-arm, .fig-idle, .heart, .candle { animation: none; }
+  .ring-fill, .animate-pulse, .fig-talk, .fig-arm, .fig-idle, .heart, .candle, .date-live { animation: none; }
 }

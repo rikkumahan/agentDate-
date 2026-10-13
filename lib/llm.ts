@@ -3,11 +3,10 @@ import { generateText, type ModelMessage } from "ai";
 import type { z } from "zod";
 import { extractJson, stripThink } from "@/lib/json";
 
-const provider = createOpenAICompatible({
-  name: "llm",
-  baseURL: process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1",
-  apiKey: process.env.LLM_API_KEY,
-});
+// LLM_API_KEY may hold several comma-separated keys; each gets its own provider in the pool.
+const providers = (process.env.LLM_API_KEY || "").split(",").map((k) => k.trim()).filter(Boolean).map((apiKey) =>
+  createOpenAICompatible({ name: "llm", baseURL: process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1", apiKey }),
+);
 
 // Optional second OpenAI-compatible host (e.g. a self-hosted Ollama) joins the same pool.
 const provider2 = process.env.LLM2_BASE_URL
@@ -19,7 +18,7 @@ const list = (s?: string) => (s ?? "").split(",").map((x) => x.trim()).filter(Bo
 // Groq rate-limits per model (8k tokens/min on free tier), so rotate through a pool:
 // LLM_MODELS="openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b" ≈ 3x throughput, plus LLM2_MODELS.
 const MODELS = [
-  ...list(process.env.LLM_MODELS || process.env.LLM_MODEL || "openai/gpt-oss-120b").map((id) => ({ id, make: provider })),
+  ...providers.flatMap((make) => list(process.env.LLM_MODELS || process.env.LLM_MODEL || "openai/gpt-oss-120b").map((id) => ({ id, make }))),
   ...(provider2 ? list(process.env.LLM2_MODELS).map((id) => ({ id, make: provider2 })) : []),
 ];
 let cursor = 0;

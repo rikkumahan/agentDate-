@@ -60,16 +60,33 @@ export function DateTranscript({ run, d, upto, compact }: { run: Run; d: DateRec
   return (
     <div className="space-y-4">
       <DateScene d={d} a={a} b={b} upto={upto} />
-      {d.venue && !compact && <p className="text-sm text-mute">{d.venue.why}</p>}
+      {d.venue && !compact && (
+        <div className="space-y-2 text-sm">
+          {d.venue.proposals?.a && d.venue.proposals?.b && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="chip">{firstOf(a)}&apos;s agent suggested {d.venue.proposals.a}</span>
+              <span className="chip">{firstOf(b)}&apos;s agent suggested {d.venue.proposals.b}</span>
+            </div>
+          )}
+          <p className="text-mute">{d.venue.why}</p>
+        </div>
+      )}
       <div className="space-y-3">
         {d.messages.slice(0, upto ?? d.messages.length).map((m, i) => {
           const left = m.speaker === "a";
           return (
             <div key={i} className={`flex items-end gap-2 ${left ? "" : "flex-row-reverse"}`}>
               <Avatar p={who(m.speaker)} size={30} />
-              <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${left ? "rounded-bl-sm bg-panel border border-line" : "rounded-br-sm bg-gold/15 border border-gold/30"}`}>
-                <div className="mb-0.5 text-[11px] text-mute">{firstOf(who(m.speaker))}&apos;s agent</div>
-                {m.text}
+              <div className={`flex max-w-[75%] flex-col gap-1 ${left ? "items-start" : "items-end"}`}>
+                {m.thought && !compact && (
+                  <div className="rounded-xl border border-dashed border-line px-3 py-1.5 font-serif text-xs italic text-mute">
+                    {firstOf(who(m.speaker))}&apos;s agent, thinking privately: {m.thought}
+                  </div>
+                )}
+                <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${left ? "rounded-bl-sm bg-panel border border-line" : "rounded-br-sm bg-gold/15 border border-gold/30"}`}>
+                  <div className="mb-0.5 text-[11px] text-mute">{firstOf(who(m.speaker))}&apos;s agent</div>
+                  {m.text}
+                </div>
               </div>
             </div>
           );
@@ -87,6 +104,11 @@ export function DateTranscript({ run, d, upto, compact }: { run: Run; d: DateRec
                   <span className="label">{firstOf(who(s))}&apos;s agent, debriefing in private</span>
                   <Score n={d.verdicts[s].score} />
                 </div>
+                {d.verdicts[s].briefing && (
+                  <p className="mt-3 rounded-lg bg-ink/60 px-3 py-2 font-serif text-sm italic">
+                    To {firstOf(who(s))}: “{d.verdicts[s].briefing}”
+                  </p>
+                )}
                 <p className="mt-2 text-sm">{d.verdicts[s].summary}</p>
                 <p className="mt-2 text-xs text-mute">Second date? {d.verdicts[s].second_date ? "Yes ♥" : "No"}</p>
                 {d.verdicts[s].highlights.length > 0 && <div className="mt-2"><Chips items={d.verdicts[s].highlights} tone="gold" /></div>}

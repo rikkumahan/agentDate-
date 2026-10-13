@@ -5,7 +5,12 @@ import type { DateEvent, Profile } from "@/lib/types";
 
 export const maxDuration = 300;
 
-const VenueSchema = z.object({ venue: z.string(), why: z.string().catch("") });
+const VenueSchema = z.object({
+  a_wants: z.string().catch(""),
+  b_wants: z.string().catch(""),
+  venue: z.string(),
+  why: z.string().catch(""),
+});
 const VerdictSchema = z.object({
   score: z.coerce.number().catch(50),
   // z.coerce.boolean() would turn the string "false" into true.
@@ -13,6 +18,7 @@ const VerdictSchema = z.object({
   highlights: z.array(z.string()).catch([]),
   concerns: z.array(z.string()).catch([]),
   summary: z.string().catch(""),
+  briefing: z.string().catch(""),
 });
 
 const first = (p: Profile) => p.name.split(" ")[0];
@@ -31,7 +37,18 @@ Rules:
 - Talk like a real person on a date, not a LinkedIn post: warm, curious, a little playful. React to what they just said.
 - Ask questions that test real fit (values, lifestyle, what they want), not small talk or tech trivia.
 - NEVER invent facts, numbers, projects, stories or achievements that are not in what you know. If you don't know, say so or talk about how you feel.
-- Max 2 short sentences (under 45 words). No hashtags, no emojis, no stage directions. Never mention being an AI.`;
+- Max 2 short sentences (under 45 words). No hashtags, no emojis, no stage directions. Never mention being an AI.
+
+Reply in EXACTLY this format (the THOUGHT is private — ${first(other)} never sees it):
+THOUGHT: <one sentence: what you're testing or what you just learned, tied to ${first(me)}'s needs or dealbreakers>
+SAY: <your line>`;
+
+// The private thought stays out of the transcript the other agent sees.
+function splitTurn(raw: string) {
+  const m = raw.match(/THOUGHT:\s*([\s\S]*?)\s*SAY:\s*([\s\S]*)/i);
+  if (m) return { thought: m[1].trim(), text: m[2].trim().replace(/^["“]|["”]$/g, "") };
+  return { thought: "", text: raw.replace(/^THOUGHT:.*$/im, "").trim() };
+}
 
 export async function POST(req: Request) {
   const { a, b, rounds = 3 } = (await req.json()) as { a: Profile; b: Profile; rounds?: number };
@@ -41,12 +58,12 @@ export async function POST(req: Request) {
     async start(controller) {
       const send = (e: DateEvent) => controller.enqueue(enc.encode(JSON.stringify(e) + "\n"));
       try {
-        const { venue, why } = await json(
-          "You plan first dates. Pick one specific, real-feeling venue/activity in a plausible shared city that both people would enjoy. JSON: { \"venue\": string, \"why\": string }",
+        const { venue, why, a_wants, b_wants } = await json(
+          'Two dating agents negotiate where to go. Each proposes a place from their own person\'s hobbies, then they agree on one specific, real-feeling venue/activity in a plausible shared city. JSON: { "a_wants": string (A\'s agent\'s proposal, short), "b_wants": string (B\'s agent\'s proposal, short), "venue": string (the agreed place), "why": string (one sentence on how they reconciled the two) }',
           `Person A: ${JSON.stringify({ name: a.name, location: a.location, hobbies: a.hobbies, interests: a.interests })}\nPerson B: ${JSON.stringify({ name: b.name, location: b.location, hobbies: b.hobbies, interests: b.interests })}`,
           VenueSchema,
         );
-        send({ type: "venue", venue, why });
+        send({ type: "venue", venue, why, proposals: { a: a_wants, b: b_wants } });
 
         // Each agent keeps its own view of the conversation: its lines are "assistant", the other's are "user".
         const transcript: { speaker: "a" | "b"; text: string }[] = [];
@@ -63,9 +80,9 @@ export async function POST(req: Request) {
 
         for (let i = 0; i < rounds * 2; i++) {
           const self = i % 2 === 0 ? "a" : "b";
-          const text = await chat(sys[self], view(self));
+          const { thought, text } = splitTurn(await chat(sys[self], view(self)));
           transcript.push({ speaker: self, text });
-          send({ type: "msg", speaker: self, text });
+          send({ type: "msg", speaker: self, text, thought });
         }
 
         const lines = transcript.map((t) => `${first(t.speaker === "a" ? a : b)}: ${t.text}`).join("\n");
@@ -76,7 +93,7 @@ export async function POST(req: Request) {
             const verdict = await json(
               `You are ${me.name}'s dating agent, debriefing privately after the date. Be honest; you work for ${first(me)}, not for the date.
 What you know about ${first(me)}: ${JSON.stringify({ needs: me.needs, dealbreakers: me.dealbreakers, values: me.values })}
-JSON: { "score": 0-100 fit for ${first(me)}, "second_date": boolean, "highlights": string[], "concerns": string[], "summary": string (2 sentences, cite moments from the date) }`,
+JSON: { "score": 0-100 fit for ${first(me)}, "second_date": boolean, "highlights": string[], "concerns": string[], "summary": string (2 sentences, cite moments from the date), "briefing": string (2 sentences spoken directly TO ${first(me)} in second person: would you send them on a second date, and what to watch for) }`,
               `Date with ${other.name} at ${venue}:\n${lines}`,
               VerdictSchema,
             );

@@ -5,11 +5,34 @@ import { pairKey, type DateEvent, type Person, type Run } from "./types";
 const ID = "live";
 const SHORTLIST_K = 3;
 
+// Pause state lives on globalThis so it survives hot reloads of this module.
+const ctl = ((globalThis as { __agentdate?: { paused: boolean; aborts: Set<AbortController> } }).__agentdate ??= {
+  paused: false,
+  aborts: new Set(),
+});
+
 async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
   const queue = [...items];
   await Promise.all(Array.from({ length: n }, async () => {
-    while (queue.length) await fn(queue.shift()!);
+    while (queue.length && !ctl.paused) await fn(queue.shift()!);
   }));
+}
+
+// Stops starting new work and cancels in-flight dates; they go back to "pending" for the next run.
+export function pausePipeline() {
+  ctl.paused = true;
+  ctl.aborts.forEach((c) => c.abort());
+}
+export const isPaused = () => ctl.paused;
+
+// Throw away all dates (keeps profiles + shortlists) and date again with the current prompts.
+export function redoDates() {
+  if (running) return;
+  update(ID, (r) => {
+    r.dates = {};
+    r.log.push(`${new Date().toLocaleTimeString()}  Cleared all dates — agents are going out again.`);
+  });
+  runPipeline();
 }
 
 const log = (msg: string) => update(ID, (r) => void r.log.push(`${new Date().toLocaleTimeString()}  ${msg}`));
@@ -30,6 +53,7 @@ export const isRunning = () => running;
 export async function runPipeline() {
   if (running) return;
   running = true;
+  ctl.paused = false;
   try {
     await pipeline();
   } finally {
@@ -123,6 +147,11 @@ async function pipeline() {
     log(`${pending.length} dates scheduled.`);
     await pool(pending, 5, runDate);
   }
+  if (ctl.paused) {
+    stage("idle");
+    log("Paused. Press Resume to continue where the agents left off.");
+    return;
+  }
 
   stage("done");
   log("All done — rankings are ready.");
@@ -138,8 +167,10 @@ async function runDate(key: string) {
     d.messages = [];
     d.verdicts = {};
   });
+  const abort = new AbortController();
+  ctl.aborts.add(abort);
   try {
-    const res = await fetch("/api/date", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ a: a.profile, b: b.profile }) });
+    const res = await fetch("/api/date", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ a: a.profile, b: b.profile }), signal: abort.signal });
     if (!res.body) throw new Error(`HTTP ${res.status}`);
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
     let buf = "";
@@ -151,8 +182,8 @@ async function runDate(key: string) {
       buf = lines.pop()!;
       for (const line of lines.filter(Boolean)) {
         const e = JSON.parse(line) as DateEvent;
-        if (e.type === "venue") set((d) => void (d.venue = { venue: e.venue, why: e.why }));
-        if (e.type === "msg") set((d) => void d.messages.push({ speaker: e.speaker, text: e.text }));
+        if (e.type === "venue") set((d) => void (d.venue = { venue: e.venue, why: e.why, proposals: e.proposals }));
+        if (e.type === "msg") set((d) => void d.messages.push({ speaker: e.speaker, text: e.text, thought: e.thought }));
         if (e.type === "verdict") set((d) => void (d.verdicts[e.speaker] = e.verdict));
         if (e.type === "error") throw new Error(e.error);
       }
@@ -163,10 +194,20 @@ async function runDate(key: string) {
     });
     log(`Date finished: ${nameOf(a)} × ${nameOf(b)}`);
   } catch (e) {
+    if (abort.signal.aborted) {
+      set((d) => {
+        d.status = "pending";
+        d.messages = [];
+        d.verdicts = {};
+      });
+      return;
+    }
     set((d) => {
       d.status = "error";
       d.error = String(e);
     });
     log(`Date failed: ${nameOf(a)} × ${nameOf(b)}: ${e}`);
+  } finally {
+    ctl.aborts.delete(abort);
   }
 }

@@ -75,7 +75,7 @@ export default function ProfilePage() {
                         <span className="flex-1 truncate text-sm">{nameOf(byId(run, r.id))}</span>
                         <Score n={r.mutual} label="mutual fit" />
                       </div>
-                      <p className="mt-2 text-xs text-mute">{r.mine.summary}</p>
+                      <p className="mt-2 text-xs text-mute">{r.mine.briefing || r.mine.summary}</p>
                       <p className="mt-1 text-[11px] text-mute">Their agent gave {r.mine.score}, the other agent gave {r.theirs.score}{r.mine.second_date && r.theirs.second_date ? ". Both want a second date ♥" : ""}</p>
                     </Link>
                   </li>

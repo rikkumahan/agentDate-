@@ -45,11 +45,12 @@ export type Verdict = {
   highlights: string[];
   concerns: string[];
   summary: string;
+  briefing?: string;
 };
 
 export type DateEvent =
-  | { type: "venue"; venue: string; why: string }
-  | { type: "msg"; speaker: string; text: string }
+  | { type: "venue"; venue: string; why: string; proposals?: { a: string; b: string } }
+  | { type: "msg"; speaker: string; text: string; thought?: string }
   | { type: "verdict"; speaker: string; verdict: Verdict }
   | { type: "error"; error: string };
 
@@ -57,8 +58,8 @@ export type DateRecord = {
   a: string;
   b: string;
   status: "pending" | "live" | "done" | "error";
-  venue?: { venue: string; why: string };
-  messages: { speaker: string; text: string }[];
+  venue?: { venue: string; why: string; proposals?: { a: string; b: string } };
+  messages: { speaker: string; text: string; thought?: string }[];
   verdicts: Record<string, Verdict>;
   error?: string;
 };

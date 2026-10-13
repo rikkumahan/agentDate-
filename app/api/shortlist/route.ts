@@ -22,13 +22,19 @@ ${JSON.stringify(me)}
 
 Pick the ${k} people from the pool you most want to take ${me.name} on a date with.
 Weigh their needs, values, lifestyle and location against each candidate — not just shared hobbies.
-JSON: { "picks": [{ "id": string, "reason": string }] }  // exactly ${k}, best first, reason = one sentence`;
-  const prompt = "POOL:\n" + others.map((o) => `[${o.id}] ${card(o.profile)}`).join("\n");
+JSON: { "picks": [{ "id": string, "reason": string }] }  // exactly ${k}, best first; "id" is copied exactly from the pool; reason = one sentence`;
+  const prompt = "POOL:\n" + others.map((o) => `id: "${o.id}" — ${card(o.profile)}`).join("\n");
   try {
     const { picks } = await json(system, prompt, Schema);
-    const valid = new Set(others.map((o) => o.id));
+    // Models sometimes echo "[id]", the person's name, or change case — resolve all of those.
+    const norm = (s: string) => s.replace(/[\[\]"']/g, "").trim().toLowerCase();
+    const resolve = (raw: string) =>
+      others.find((o) => norm(o.id) === norm(raw))?.id ?? others.find((o) => norm(o.profile.name) === norm(raw))?.id;
     const seen = new Set<string>();
-    const good = picks.filter((p) => valid.has(p.id) && !seen.has(p.id) && seen.add(p.id)).slice(0, k);
+    const good = picks
+      .map((p) => ({ ...p, id: resolve(p.id) ?? "" }))
+      .filter((p) => p.id && !seen.has(p.id) && seen.add(p.id))
+      .slice(0, k);
     // An empty shortlist would be saved and never retried — fail so the pipeline can retry it.
     if (!good.length) throw new Error("Agent returned no valid picks");
     return Response.json({ picks: good });

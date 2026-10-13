@@ -3,18 +3,19 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useRun } from "@/lib/store";
-import { runPipeline } from "@/lib/pipeline";
+import { isRunning, pausePipeline, redoDates, runPipeline } from "@/lib/pipeline";
+import { LoveMap } from "@/components/lovemap";
 import { rankFor } from "@/lib/rank";
 import type { Run, Stage } from "@/lib/types";
 import { Avatar, byId, Chips, DateLink, DateTranscript, firstOf, nameOf, Score } from "@/components/ui";
 
 const STAGES: Stage[] = ["scraping", "analyzing", "shortlisting", "dating", "done"];
-const TABS = ["People", "Dates", "Rankings"] as const;
+const TABS = ["Love map", "People", "Dates", "Rankings"] as const;
 
 export default function RunPage() {
   const { run: id } = useParams<{ run: string }>();
   const run = useRun(id);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("People");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Love map");
 
   if (!run)
     return (
@@ -34,7 +35,13 @@ export default function RunPage() {
           <h1 className="font-serif text-4xl">{run.people.length} people, {dates.length} dates</h1>
         </div>
         <div className="flex gap-2">
+          {id === "live" && run.stage !== "idle" && run.stage !== "done" && isRunning() && (
+            <button className="btn-ghost" onClick={pausePipeline}>Pause</button>
+          )}
           {id === "live" && <button className="btn-ghost" onClick={() => runPipeline()}>Resume / retry failed</button>}
+          {id === "live" && !isRunning() && Object.keys(run.dates).length > 0 && (
+            <button className="btn-ghost" onClick={redoDates}>Redo all dates</button>
+          )}
           <button className="btn-ghost" onClick={() => exportRun(run)}>Export JSON</button>
         </div>
       </div>
@@ -69,6 +76,8 @@ export default function RunPage() {
           </button>
         ))}
       </div>
+
+      {tab === "Love map" && <LoveMap run={run} />}
 
       {tab === "People" && (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
