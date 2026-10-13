@@ -85,7 +85,7 @@ export function DateTranscript({ run, d, upto, compact }: { run: Run; d: DateRec
                 )}
                 <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${left ? "rounded-bl-sm bg-panel border border-line" : "rounded-br-sm bg-gold/15 border border-gold/30"}`}>
                   <div className="mb-0.5 text-[11px] text-mute">{firstOf(who(m.speaker))}&apos;s agent</div>
-                  {m.text}
+                  {m.text.replace(/^\**\s*SAY\s*\**\s*:\s*\**\s*/i, "")}
                 </div>
               </div>
             </div>

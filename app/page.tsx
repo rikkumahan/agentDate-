@@ -25,14 +25,24 @@ export default function Home() {
     // Replacing the live run under an in-flight pipeline would orphan its dates.
     if (isRunning()) return router.push("/live");
     setBusy(true);
-    const demo = joinDemo ? await loadRun("demo") : undefined;
-    const existing = new Set(demo?.people.map((p) => p.id));
+    // New people join your existing run if there is one (nothing already done is redone), else the demo pool.
+    const live = await loadRun("live");
+    const base = live ?? (joinDemo ? await loadRun("demo") : undefined);
+    const existing = new Set(base?.people.map((p) => p.id));
+    const fresh = people.filter((p) => !existing.has(p.id));
+    // Growing your own pool re-runs matching for everyone (profiles are kept); joining the demo keeps its dates.
+    const rematch = base?.id === "live" && fresh.length > 0;
+    const kept = base ? structuredClone(base.people) : [];
+    if (rematch) for (const p of kept) p.shortlist = undefined;
     const run: Run = {
       id: "live",
       stage: "idle",
-      people: [...(demo ? structuredClone(demo.people) : []), ...people.filter((p) => !existing.has(p.id))],
-      dates: demo ? structuredClone(demo.dates) : {},
-      log: [demo ? `Joined the ${demo.people.length}-person demo pool.` : "New pool."],
+      people: [...kept, ...fresh],
+      dates: base && !rematch ? structuredClone(base.dates) : {},
+      log: [
+        ...(base?.id === "live" ? base.log : []),
+        base ? `Added ${fresh.length} people to a pool of ${base.people.length}.` : "New pool.",
+      ],
     };
     setRun(run);
     router.push("/live");

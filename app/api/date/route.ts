@@ -45,9 +45,11 @@ SAY: <your line>`;
 
 // The private thought stays out of the transcript the other agent sees.
 function splitTurn(raw: string) {
-  const m = raw.match(/THOUGHT:\s*([\s\S]*?)\s*SAY:\s*([\s\S]*)/i);
-  if (m) return { thought: m[1].trim(), text: m[2].trim().replace(/^["“]|["”]$/g, "") };
-  return { thought: "", text: raw.replace(/^THOUGHT:.*$/im, "").trim() };
+  // Tolerate markdown (**THOUGHT:**), missing colons, and brackets around the thought.
+  const m = raw.match(/\**\s*THOUGHT\s*\**\s*[:\-—]?\s*\**\s*([\s\S]*?)\s*\**\s*SAY\s*\**\s*[:\-—]?\s*\**\s*([\s\S]*)/i);
+  const unquote = (s: string) => s.trim().replace(/^[\[("“]+|[\])"”]+$/g, "").trim();
+  if (m) return { thought: unquote(m[1]), text: unquote(m[2]) };
+  return { thought: "", text: unquote(raw.replace(/^\**\s*THOUGHT.*$/im, "").replace(/^\**\s*SAY\s*\**\s*[:\-—]?\s*\**/i, "")) };
 }
 
 export async function POST(req: Request) {

@@ -36,6 +36,7 @@ export type Person = {
   raw?: { linkedin: unknown; instagram: unknown };
   profile?: Profile;
   shortlist?: { id: string; reason: string }[];
+  gender?: { gender: "woman" | "man" | "unknown"; evidence: string };
   error?: string;
 };
 
@@ -64,7 +65,7 @@ export type DateRecord = {
   error?: string;
 };
 
-export type Stage = "idle" | "scraping" | "analyzing" | "shortlisting" | "dating" | "done";
+export type Stage = "idle" | "scraping" | "analyzing" | "classifying" | "shortlisting" | "dating" | "done";
 
 export type Run = {
   id: string;

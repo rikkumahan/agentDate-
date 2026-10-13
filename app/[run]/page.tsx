@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRun } from "@/lib/store";
 import { isRunning, pausePipeline, redoDates, runPipeline } from "@/lib/pipeline";
 import { LoveMap } from "@/components/lovemap";
@@ -9,18 +9,32 @@ import { rankFor } from "@/lib/rank";
 import type { Run, Stage } from "@/lib/types";
 import { Avatar, byId, Chips, DateLink, DateTranscript, firstOf, nameOf, Score } from "@/components/ui";
 
-const STAGES: Stage[] = ["scraping", "analyzing", "shortlisting", "dating", "done"];
+const STAGES: Stage[] = ["scraping", "analyzing", "classifying", "shortlisting", "dating", "done"];
 const TABS = ["Love map", "People", "Dates", "Rankings"] as const;
 
 export default function RunPage() {
   const { run: id } = useParams<{ run: string }>();
   const run = useRun(id);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Love map");
+  // Without public/demo.json the request falls through to this page as HTML.
+  const [demoMissing, setDemoMissing] = useState(false);
+  useEffect(() => {
+    if (id !== "demo") return;
+    fetch("/demo.json", { method: "HEAD" })
+      .then((r) => setDemoMissing(!r.ok || !r.headers.get("content-type")?.includes("json")))
+      .catch(() => setDemoMissing(true));
+  }, [id]);
 
   if (!run)
     return (
       <div className="card mt-10 p-8 text-center text-mute">
-        {id === "live" ? <>No run yet. <Link href="/" className="text-gold">Paste some people</Link></> : "Loading…"}
+        {id === "live" ? (
+          <>No run yet. <Link href="/" className="text-gold">Paste some people</Link></>
+        ) : demoMissing ? (
+          <>The demo run hasn&apos;t been published yet. <Link href="/" className="text-gold">Start your own run</Link></>
+        ) : (
+          "Loading…"
+        )}
       </div>
     );
 
@@ -40,7 +54,7 @@ export default function RunPage() {
           )}
           {id === "live" && <button className="btn-ghost" onClick={() => runPipeline()}>Resume / retry failed</button>}
           {id === "live" && !isRunning() && Object.keys(run.dates).length > 0 && (
-            <button className="btn-ghost" onClick={redoDates}>Redo all dates</button>
+            <button className="btn-ghost" onClick={redoDates}>Redo matching &amp; dates</button>
           )}
           <button className="btn-ghost" onClick={() => exportRun(run)}>Export JSON</button>
         </div>

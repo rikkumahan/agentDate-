@@ -25,12 +25,19 @@ export function pausePipeline() {
 }
 export const isPaused = () => ctl.paused;
 
-// Throw away all dates (keeps profiles + shortlists) and date again with the current prompts.
+// Man–woman matching; people with no explicit gender signal can be matched with anyone.
+const canDate = (a: Person, b: Person) => {
+  const x = a.gender?.gender ?? "unknown", y = b.gender?.gender ?? "unknown";
+  return x === "unknown" || y === "unknown" || x !== y;
+};
+
+// Throw away shortlists + dates (keeps profiles) and match again with the current rules and prompts.
 export function redoDates() {
   if (running) return;
   update(ID, (r) => {
     r.dates = {};
-    r.log.push(`${new Date().toLocaleTimeString()}  Cleared all dates — agents are going out again.`);
+    for (const p of r.people) p.shortlist = undefined;
+    r.log.push(`${new Date().toLocaleTimeString()}  Cleared shortlists and dates — agents are choosing again.`);
   });
   runPipeline();
 }
@@ -110,6 +117,21 @@ async function pipeline() {
     });
   }
 
+  // 2b. Gender, from explicit signals only — used to pair agents man–woman.
+  const toClassify = getRun(ID)!.people.filter((p) => p.profile && p.raw && !p.gender);
+  if (toClassify.length) {
+    stage("classifying");
+    log(`Checking ${toClassify.length} profiles for explicit gender signals (pronouns, recommendations)…`);
+    await pool(toClassify, 4, async (p) => {
+      try {
+        const g = await post("/api/gender", p.raw);
+        update(ID, (r) => void (person(r, p.id).gender = { gender: g.gender, evidence: g.evidence }));
+      } catch (e) {
+        log(`Gender check failed for ${nameOf(p)}: ${e}`);
+      }
+    });
+  }
+
   // 3. Shortlist
   const ready = getRun(ID)!.people.filter((p) => p.profile);
   const toShortlist = ready.filter((p) => !p.shortlist?.length);
@@ -118,7 +140,8 @@ async function pipeline() {
     log(`${toShortlist.length} agents choosing who to date…`);
     await pool(toShortlist, 4, async (p) => {
       try {
-        const others = ready.filter((o) => o.id !== p.id).map((o) => ({ id: o.id, profile: o.profile }));
+        const others = ready.filter((o) => o.id !== p.id && canDate(p, o)).map((o) => ({ id: o.id, profile: o.profile }));
+        if (!others.length) return log(`No compatible people in the pool for ${nameOf(p)} yet.`);
         const { picks } = await post("/api/shortlist", { me: p.profile, others, k: Math.min(SHORTLIST_K, others.length) });
         update(ID, (r) => void (person(r, p.id).shortlist = picks));
         log(`${nameOf(p)}'s agent asked out ${picks.map((x: { id: string }) => nameOf(person(getRun(ID)!, x.id))).join(", ")}`);

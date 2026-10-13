@@ -22,6 +22,9 @@ export default function ProfilePage() {
         <div className="min-w-0 flex-1">
           <h1 className="font-serif text-4xl">{nameOf(p)}</h1>
           {pr && <p className="text-mute">{pr.headline}<br />{pr.location}{pr.age_range !== "unknown" ? `, ${pr.age_range}` : ""}</p>}
+          {p.gender && p.gender.gender !== "unknown" && (
+            <p className="mt-1 text-xs text-mute" title={p.gender.evidence}>Matched man–woman as a {p.gender.gender} (from: {p.gender.evidence})</p>
+          )}
           <div className="mt-2 flex gap-3 text-sm">
             <a href={p.linkedin} target="_blank" rel="noreferrer" className="text-gold hover:underline">LinkedIn ↗</a>
             <a href={p.instagram} target="_blank" rel="noreferrer" className="text-gold hover:underline">Instagram ↗</a>
