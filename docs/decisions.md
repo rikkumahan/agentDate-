@@ -4,3 +4,4 @@ Append-only. Never edit or delete another entry. Newest at the bottom.
 Format: [YYYY-MM-DD HH:MM] [tool] [branch] [status] — what / why
 
 [2026-10-14 00:00] [setup] [main] [done] — scaffolded via magent-init
+[2026-10-14 05:00] [claude-code] [main] [done] — demo rebuilt as 25 people, 43/43 dates done, 0 errors (public/demo.json); home page copy changed from 30 to 25 people; deployed to production. Why: the hand-in demo must match the 25 verified people and be fully dated before recording.
