@@ -68,7 +68,7 @@ export default function Home() {
             </li>
           ))}
         </ol>
-        <a href="/demo" className="btn-ghost mt-8">Watch 25 agents date</a>
+        <a href="/demo" className="btn mt-8">Open the finished demo: 30 people, already dated</a>
       </section>
 
       <section className="card p-5">
@@ -86,7 +86,7 @@ export default function Home() {
         </div>
         <label className="mt-4 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={joinDemo} onChange={(e) => setJoinDemo(e.target.checked)} className="accent-[#f2c46d]" />
-          Add them to the 25-person demo pool (so they have people to date)
+          Add them to the demo pool (so they have 30 people to date)
         </label>
         <button className="btn mt-5 w-full" disabled={busy || !people.length || (!joinDemo && people.length < 2)} onClick={start}>
           {busy ? "Starting…" : "Send the agents out"}

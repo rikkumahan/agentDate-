@@ -20,7 +20,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             agent<span className="text-gold">Date</span> <span className="text-rose">♥</span>
           </Link>
           <nav className="flex gap-3 text-sm text-mute">
-            <Link href="/demo" className="hover:text-cream">Demo (25 people)</Link>
+            <Link href="/demo" className="hover:text-cream">Finished demo</Link>
             <Link href="/live" className="hover:text-cream">My run</Link>
           </nav>
         </header>
