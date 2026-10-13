@@ -1,5 +1,5 @@
 export const igHandle = (url: string) =>
-  (url.match(/instagram\.com\/([^/?#]+)/i)?.[1] ?? url.replace(/^@/, "")).toLowerCase().trim();
+  (url.match(/instagram\.com\/([^/?#]+)/i)?.[1] ?? url).replace(/^@/, "").toLowerCase().trim();
 
 // Malformed percent-encoding (e.g. "%E0%A4%A") must not throw and abort the whole paste.
 export const safeDecode = (s: string) => {

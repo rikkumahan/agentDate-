@@ -74,7 +74,10 @@ async function pipeline() {
     await pool(toAnalyze, 4, async (p) => {
       try {
         const { profile } = await post("/api/analyze", { ...p.raw, links: { linkedin: p.linkedin, instagram: p.instagram } });
-        update(ID, (r) => void (person(r, p.id).profile = profile));
+        update(ID, (r) => {
+          person(r, p.id).profile = profile;
+          person(r, p.id).error = undefined;
+        });
         log(`Profile ready: ${profile.name}`);
       } catch (e) {
         update(ID, (r) => void (person(r, p.id).error = String(e)));
@@ -154,7 +157,10 @@ async function runDate(key: string) {
         if (e.type === "error") throw new Error(e.error);
       }
     }
-    set((d) => void (d.status = Object.keys(d.verdicts).length === 2 ? "done" : "error"));
+    set((d) => {
+      d.status = Object.keys(d.verdicts).length === 2 ? "done" : "error";
+      if (d.status === "error") d.error ??= "stream ended early";
+    });
     log(`Date finished: ${nameOf(a)} × ${nameOf(b)}`);
   } catch (e) {
     set((d) => {

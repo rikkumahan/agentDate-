@@ -4,10 +4,10 @@ type Kind = "cafe" | "park" | "bar" | "gallery" | "restaurant";
 
 export function sceneKind(venue = ""): Kind {
   const v = venue.toLowerCase();
-  if (/coffee|caf[eé]|espresso|tea|bakery|brunch/.test(v)) return "cafe";
-  if (/park|run|walk|hike|trail|garden|beach|lake|picnic|bike|cycle/.test(v)) return "park";
-  if (/bar|wine|cocktail|rooftop|pub|brew|jazz|speakeasy/.test(v)) return "bar";
-  if (/gallery|museum|exhibit|studio|art|design|pottery|workshop|class/.test(v)) return "gallery";
+  if (/\b(coffee|caf[eé]|espresso|tea|bakery|brunch|roaster)/.test(v)) return "cafe";
+  if (/\b(park|run|walk|hike|trail|garden|beach|lake|picnic|bike|cycl)/.test(v)) return "park";
+  if (/\b(bar|wine|cocktail|rooftop|pub|brew|jazz|speakeasy)/.test(v)) return "bar";
+  if (/\b(galler|museum|exhibit|studio|art|design|pottery|workshop|class)/.test(v)) return "gallery";
   return "restaurant";
 }
 

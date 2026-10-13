@@ -1,6 +1,6 @@
 // Drop media/URL/ID noise and cap sizes so the raw profile fits an LLM prompt.
 // Case-sensitive and anchored so real keys like "topics", "paid" or "returnDate" survive.
-const NOISE = /^(id|urn|fbid|dimensions|childPosts|images|relatedProfiles|latestIgtvVideos|externalUrlShimmed|moreProfiles|emails|profileActions|composeOptionType|sectionTotals|originalQuery|profileLocales)$|[uU]rls?$|^(profilePic|thumbnail|display|video|sidecar)|[iI]mage|Id$/;
+const NOISE = /^(id|urn|fbid|dimensions|childPosts|images|relatedProfiles|latestIgtvVideos|externalUrlShimmed|moreProfiles|emails|profileActions|composeOptionType|sectionTotals|originalQuery|profileLocales)$|[uU]rls?$|^(profilePic|thumbnail|displayUrl|displayResources|videoUrl|videoView|sidecar)|[iI]mage|Id$/;
 
 export function prune(v: unknown, depth = 0): unknown {
   if (typeof v === "string") return v.length > 600 ? v.slice(0, 600) + "…" : v;

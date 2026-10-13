@@ -1,7 +1,7 @@
 import { json } from "@/lib/llm";
 import { ProfileSchema } from "@/lib/types";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const SYSTEM = `You are a personal dating agent. You are about to represent one real person on dates.
 Your only sources are their public LinkedIn and public Instagram data, given as raw JSON.
