@@ -16,7 +16,7 @@ LinkedIn + Instagram ──▶ Apify scrapers ──▶ Agent reads person ─�
 ```
 
 1. **Scrape** — `app/api/scrape`: one Apify run per platform for the whole batch
-   (`apify/instagram-profile-scraper`, `dev_fusion/Linkedin-Profile-Scraper`). Raw JSON is pruned of media/IDs.
+   (`apify/instagram-profile-scraper`, `harvestapi/linkedin-profile-scraper`). Raw JSON is pruned of media/IDs.
 2. **Read** — `app/api/analyze`: the LLM turns both sources into a profile. Every claim must be grounded;
    the evidence list quotes the captions / job entries it came from.
 3. **Shortlist** — `app/api/shortlist`: each agent reviews the whole pool and asks out its top 3, with a reason.

@@ -44,7 +44,10 @@ ${linkedin ? JSON.stringify(linkedin).slice(0, 6000) : "(not available)"}
 INSTAGRAM DATA:
 ${instagram ? JSON.stringify(instagram).slice(0, 6000) : "(not available)"}`;
   try {
-    const profile = await json(SYSTEM, prompt, ProfileSchema);
+    let profile = await json(SYSTEM, prompt, ProfileSchema);
+    // Schema defaults can turn a garbled reply into an empty profile; retry once rather than accept it.
+    if (!profile.summary || !profile.needs.length) profile = await json(SYSTEM, prompt, ProfileSchema);
+    if (!profile.summary || !profile.needs.length) throw new Error("Model returned an empty profile");
     // Models sometimes leave the name as "Unknown"; the scraped data always has it.
     if (!profile.name || /^unknown$/i.test(profile.name))
       profile.name = [linkedin?.firstName, linkedin?.lastName].filter(Boolean).join(" ") || instagram?.fullName || profile.name;

@@ -6,7 +6,7 @@ Paste LinkedIn + Instagram links. An AI agent reads each person, builds a profil
 
 ## Technical section — scraping stack (≤500 chars)
 
-Apify actors run from a Next.js API route on Vercel: apify/instagram-profile-scraper (bio, captions, hashtags, locations, image alt-text from public profiles) and dev_fusion/Linkedin-Profile-Scraper (headline, experience, education, about). One batched run per platform; results matched back by handle/slug, pruned of media/IDs, then read by an LLM (Groq, OpenAI-compatible) via the Vercel AI SDK.
+Apify actors run from a Next.js API route on Vercel: apify/instagram-profile-scraper (bio, captions, hashtags, locations, image alt-text from public profiles) and harvestapi/linkedin-profile-scraper (headline, experience, education, about, recommendations). One batched run per platform; results matched back by handle/slug, pruned of media/IDs, then read by LLM agents (Groq + self-hosted Ollama pool) via the Vercel AI SDK.
 
 ## Video shot list (≤3 min)
 
