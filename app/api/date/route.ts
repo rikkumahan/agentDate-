@@ -52,23 +52,30 @@ function splitTurn(raw: string) {
   return { thought: "", text: unquote(raw.replace(/^\**\s*THOUGHT.*$/im, "").replace(/^\**\s*SAY\s*\**\s*[:\-—]?\s*\**/i, "")) };
 }
 
+// A date is ~9 LLM calls; on a slow provider that outlasts one function invocation (maxDuration).
+// So the route is resumable: the client sends back what it already has, and the route stops starting new
+// steps after BUDGET_MS, ending the stream cleanly so the client calls again to continue.
+const BUDGET_MS = 170_000;
+
 async function handle(req: Request): Promise<Response> {
-  const { a, b, rounds = 3 } = (await req.json()) as { a: Profile; b: Profile; rounds?: number };
+  const { a, b, rounds = 3, venue: known, messages = [] } = (await req.json()) as {
+    a: Profile;
+    b: Profile;
+    rounds?: number;
+    venue?: string;
+    messages?: { speaker: "a" | "b"; text: string }[];
+  };
   const enc = new TextEncoder();
+  const started = Date.now();
+  const outOfTime = () => Date.now() - started > BUDGET_MS;
 
   const stream = new ReadableStream({
     async start(controller) {
       const send = (e: DateEvent) => controller.enqueue(enc.encode(JSON.stringify(e) + "\n"));
       try {
-        const { venue, why, a_wants, b_wants } = await json(
-          'Two dating agents negotiate where to go. Each proposes a place from their own person\'s hobbies, then they agree on one specific, real-feeling venue/activity in a plausible shared city. JSON: { "a_wants": string (A\'s agent\'s proposal, short), "b_wants": string (B\'s agent\'s proposal, short), "venue": string (the agreed place), "why": string (one sentence on how they reconciled the two) }',
-          `Person A: ${JSON.stringify({ name: a.name, location: a.location, hobbies: a.hobbies, interests: a.interests })}\nPerson B: ${JSON.stringify({ name: b.name, location: b.location, hobbies: b.hobbies, interests: b.interests })}`,
-          VenueSchema,
-        );
-        send({ type: "venue", venue, why, proposals: { a: a_wants, b: b_wants } });
-
+        const venue = known || (await negotiateVenue(a, b, send));
         // Each agent keeps its own view of the conversation: its lines are "assistant", the other's are "user".
-        const transcript: { speaker: "a" | "b"; text: string }[] = [];
+        const transcript = messages.map(({ speaker, text }) => ({ speaker, text }));
         const view = (self: "a" | "b"): ModelMessage[] => {
           const msgs: ModelMessage[] = transcript.map((t) => ({
             role: t.speaker === self ? "assistant" : "user",
@@ -80,12 +87,14 @@ async function handle(req: Request): Promise<Response> {
         };
         const sys = { a: agentSystem(a, b, venue), b: agentSystem(b, a, venue) };
 
-        for (let i = 0; i < rounds * 2; i++) {
+        for (let i = transcript.length; i < rounds * 2; i++) {
+          if (outOfTime()) return;
           const self = i % 2 === 0 ? "a" : "b";
           const { thought, text } = splitTurn(await chat(sys[self], view(self)));
           transcript.push({ speaker: self, text });
           send({ type: "msg", speaker: self, text, thought });
         }
+        if (outOfTime()) return;
 
         const lines = transcript.map((t) => `${first(t.speaker === "a" ? a : b)}: ${t.text}`).join("\n");
         await Promise.all(
@@ -104,13 +113,25 @@ JSON: { "score": 0-100 fit for ${first(me)}, "second_date": boolean, "highlights
           }),
         );
       } catch (e) {
-        send({ type: "error", error: String(e) });
+        // Running out of this request's time is not a failure: the client resumes with what it has.
+        if (!String(e).includes("Out of time for this request")) send({ type: "error", error: String(e) });
+      } finally {
+        controller.close();
       }
-      controller.close();
     },
   });
 
   return new Response(stream, { headers: { "Content-Type": "application/x-ndjson" } });
+}
+
+async function negotiateVenue(a: Profile, b: Profile, send: (e: DateEvent) => void) {
+  const { venue, why, a_wants, b_wants } = await json(
+    'Two dating agents negotiate where to go. Each proposes a place from their own person\'s hobbies, then they agree on one specific, real-feeling venue/activity in a plausible shared city. JSON: { "a_wants": string (A\'s agent\'s proposal, short), "b_wants": string (B\'s agent\'s proposal, short), "venue": string (the agreed place), "why": string (one sentence on how they reconciled the two) }',
+    `Person A: ${JSON.stringify({ name: a.name, location: a.location, hobbies: a.hobbies, interests: a.interests })}\nPerson B: ${JSON.stringify({ name: b.name, location: b.location, hobbies: b.hobbies, interests: b.interests })}`,
+    VenueSchema,
+  );
+  send({ type: "venue", venue, why, proposals: { a: a_wants, b: b_wants } });
+  return venue;
 }
 
 export const POST = withUserKey(handle);

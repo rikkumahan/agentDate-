@@ -216,23 +216,33 @@ async function runDate(key: string) {
   const abort = new AbortController();
   ctl.aborts.add(abort);
   try {
-    const res = await fetch("/api/date", { method: "POST", headers: headers(), body: JSON.stringify({ a: a.profile, b: b.profile }), signal: abort.signal });
-    if (!res.body) throw new Error(`HTTP ${res.status}`);
-    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buf = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += value;
-      const lines = buf.split("\n");
-      buf = lines.pop()!;
-      for (const line of lines.filter(Boolean)) {
-        const e = JSON.parse(line) as DateEvent;
-        if (e.type === "venue") set((d) => void (d.venue = { venue: e.venue, why: e.why, proposals: e.proposals }));
-        if (e.type === "msg") set((d) => void d.messages.push({ speaker: e.speaker, text: e.text, thought: e.thought }));
-        if (e.type === "verdict") set((d) => void (d.verdicts[e.speaker] = e.verdict));
-        if (e.type === "error") throw new Error(e.error);
+    // The route stops before the server time limit on slow providers; each leg sends back what we have so far
+    // and continues from there. Legs that add nothing mean it is stuck.
+    for (let leg = 0; leg < 6; leg++) {
+      const cur = getRun(ID)!.dates[key];
+      if (Object.keys(cur.verdicts).length === 2) break;
+      const before = cur.messages.length + (cur.venue ? 1 : 0);
+      const body = { a: a.profile, b: b.profile, venue: cur.venue?.venue, messages: cur.messages.map(({ speaker, text }) => ({ speaker, text })) };
+      const res = await fetch("/api/date", { method: "POST", headers: headers(), body: JSON.stringify(body), signal: abort.signal });
+      if (!res.body) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += value;
+        const lines = buf.split("\n");
+        buf = lines.pop()!;
+        for (const line of lines.filter(Boolean)) {
+          const e = JSON.parse(line) as DateEvent;
+          if (e.type === "venue") set((d) => void (d.venue = { venue: e.venue, why: e.why, proposals: e.proposals }));
+          if (e.type === "msg") set((d) => void d.messages.push({ speaker: e.speaker, text: e.text, thought: e.thought }));
+          if (e.type === "verdict") set((d) => void (d.verdicts[e.speaker] = e.verdict));
+          if (e.type === "error") throw new Error(e.error);
+        }
       }
+      const now = getRun(ID)!.dates[key];
+      if (now.messages.length + (now.venue ? 1 : 0) === before && Object.keys(now.verdicts).length < 2) break;
     }
     set((d) => {
       d.status = Object.keys(d.verdicts).length === 2 ? "done" : "error";

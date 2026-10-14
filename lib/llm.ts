@@ -28,13 +28,17 @@ if (process.env.LLM2_BASE_URL) {
 // A visitor's own OpenAI-compatible provider (x-llm-base / x-llm-key / x-llm-model headers),
 // scoped to the request that carried it.
 type UserLlm = { baseURL: string; apiKey: string; model: string };
-const userLlm = new AsyncLocalStorage<UserLlm | undefined>();
+// Per request: the visitor provider (if any) and a deadline safely inside the 300s function limit.
+const ctx = new AsyncLocalStorage<{ user?: UserLlm; deadline: number }>();
+const REQUEST_BUDGET_MS = 280_000;
+const CALL_TIMEOUT_MS = 100_000; // Cloudflare tunnels (self-hosted Ollama) cut responses at 100s anyway
 export const withUserKey =
   (handler: (req: Request) => Promise<Response>) =>
   (req: Request) => {
     const h = (n: string) => req.headers.get(n)?.trim() ?? "";
     const u = { baseURL: h("x-llm-base"), apiKey: h("x-llm-key"), model: h("x-llm-model") };
-    return userLlm.run(u.apiKey && u.model && safeBaseUrl(u.baseURL) ? u : undefined, () => handler(req));
+    const user = u.apiKey && u.model && safeBaseUrl(u.baseURL) ? u : undefined;
+    return ctx.run({ user, deadline: Date.now() + REQUEST_BUDGET_MS }, () => handler(req));
   };
 
 const userSlots = ({ baseURL, apiKey, model }: UserLlm): LlmSlot[] => [
@@ -53,27 +57,29 @@ const optionsFor = (id: string) => (effort && id.includes("gpt-oss") ? { llm: { 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function chat(system: string, messages: ModelMessage[], temperature = 0.9) {
-  const own = userLlm.getStore();
+  const { user: own, deadline } = ctx.getStore() ?? { deadline: Infinity };
   // A visitor's own key is tried first; the shared pool is the fallback.
   const pools = own ? [userSlots(own), SHARED] : [SHARED];
   let lastErr: unknown = new Error("No LLM configured (set LLM_API_KEY)");
   for (let attempt = 0; attempt < 12; attempt++) {
     const now = Date.now();
+    const left = deadline - now;
+    if (left < 5_000) throw new Error(`Out of time for this request (last error: ${String(lastErr).slice(0, 120)})`);
     const picks = pools.map((p) => pick(p, readyAt, now, cursor));
     const hit = picks.find((p) => "slot" in p);
     if (!hit) {
       const wait = Math.min(...picks.map((p) => ("wait" in p ? p.wait : Infinity)));
-      if (wait > MAX_WAIT)
+      if (wait > Math.min(MAX_WAIT, left - 5_000))
         throw new Error(`All LLM keys are rate-limited for ~${Math.ceil(wait / 60000)} min. Add your own API key on the home page, or retry later.`);
       await sleep(wait);
       continue;
     }
-    const { key, id, make, slow } = (hit as { slot: LlmSlot }).slot;
+    const { key, id, make } = (hit as { slot: LlmSlot }).slot;
     cursor++;
     try {
       const { text } = await generateText({
         model: make(id), system, messages, temperature, maxRetries: 0, maxOutputTokens: 3000, providerOptions: optionsFor(id),
-        abortSignal: slow ? AbortSignal.timeout(120_000) : undefined,
+        abortSignal: AbortSignal.timeout(Math.min(CALL_TIMEOUT_MS, left)),
       });
       const out = stripThink(text).trim();
       if (out) return out;
