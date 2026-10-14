@@ -5,7 +5,7 @@ builds a profile (needs, hobbies, interests, values — with quoted evidence), g
 agents on that person's behalf, and ranks who fits them best.
 
 - **Demo (25 real people, already run):** `/demo`
-- **Try it:** paste LinkedIn + public Instagram links on `/` — optionally added to the demo pool so your people have someone to date.
+- **Try it:** paste LinkedIn + public Instagram links for at least 2 people on `/`; their agents date each other.
 
 ## How it works
 
