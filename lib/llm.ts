@@ -1,27 +1,43 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, type ModelMessage } from "ai";
 import type { z } from "zod";
 import { extractJson, stripThink } from "@/lib/json";
+import { parseWait, pick } from "@/lib/schedule";
 
-// LLM_API_KEY may hold several comma-separated keys; each gets its own provider in the pool.
-const providers = (process.env.LLM_API_KEY || "").split(",").map((k) => k.trim()).filter(Boolean).map((apiKey) =>
-  createOpenAICompatible({ name: "llm", baseURL: process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1", apiKey }),
-);
-
-// Optional second OpenAI-compatible host (e.g. a self-hosted Ollama) joins the same pool.
-const provider2 = process.env.LLM2_BASE_URL
-  ? createOpenAICompatible({ name: "llm2", baseURL: process.env.LLM2_BASE_URL, apiKey: process.env.LLM2_API_KEY || "ollama" })
-  : undefined;
-
+const BASE_URL = process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1";
 const list = (s?: string) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+const MODEL_IDS = list(process.env.LLM_MODELS || process.env.LLM_MODEL || "openai/gpt-oss-120b");
+type Provider = ReturnType<typeof createOpenAICompatible>;
+type LlmSlot = { key: string; id: string; make: Provider; slow?: boolean };
 
-// Groq rate-limits per model (8k tokens/min on free tier), so rotate through a pool:
-// LLM_MODELS="openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b" ≈ 3x throughput, plus LLM2_MODELS.
-const MODELS = [
-  ...providers.flatMap((make) => list(process.env.LLM_MODELS || process.env.LLM_MODEL || "openai/gpt-oss-120b").map((id) => ({ id, make }))),
-  ...(provider2 ? list(process.env.LLM2_MODELS).map((id) => ({ id, make: provider2 })) : []),
-];
+// Every (key, model) pair is a slot: Groq limits tokens per model per organization, so each pair has its own budget.
+// LLM_API_KEY may hold several comma-separated keys.
+const SHARED: LlmSlot[] = list(process.env.LLM_API_KEY).flatMap((apiKey, k) => {
+  const make = createOpenAICompatible({ name: "llm", baseURL: BASE_URL, apiKey });
+  return MODEL_IDS.map((id) => ({ key: `key${k}:${id}`, id, make }));
+});
+// Optional self-hosted OpenAI-compatible host (e.g. Ollama): slow, so only used when every Groq slot is benched.
+if (process.env.LLM2_BASE_URL) {
+  const make = createOpenAICompatible({ name: "llm2", baseURL: process.env.LLM2_BASE_URL, apiKey: process.env.LLM2_API_KEY || "ollama" });
+  for (const id of list(process.env.LLM2_MODELS)) SHARED.push({ key: `llm2:${id}`, id, make, slow: true });
+}
+
+// A visitor's own Groq key (x-llm-key header), scoped to the request that carried it.
+const userKey = new AsyncLocalStorage<string>();
+export const withUserKey =
+  (handler: (req: Request) => Promise<Response>) =>
+  (req: Request) =>
+    userKey.run(req.headers.get("x-llm-key")?.trim() ?? "", () => handler(req));
+const userSlots = (apiKey: string): LlmSlot[] => {
+  const make = createOpenAICompatible({ name: "llm", baseURL: BASE_URL, apiKey });
+  return MODEL_IDS.map((id) => ({ key: `user${apiKey.slice(-6)}:${id}`, id, make }));
+};
+
+// ponytail: bench times live in this server instance's memory; a cold instance relearns them on its first 429.
+const readyAt = new Map<string, number>();
 let cursor = 0;
+const MAX_WAIT = 20_000; // longer than this and we fail fast with a clear message instead of hanging the date
 
 // gpt-oss is ~3x faster at "low" reasoning; other models may reject the option, so scope it.
 const effort = process.env.LLM_REASONING_EFFORT;
@@ -30,20 +46,37 @@ const optionsFor = (id: string) => (effort && id.includes("gpt-oss") ? { llm: { 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function chat(system: string, messages: ModelMessage[], temperature = 0.9) {
-  let lastErr: unknown;
-  // On any failure (usually 429) move straight to the next model; back off only after a full lap.
-  for (let attempt = 0; attempt < MODELS.length * 8; attempt++) {
-    const { id, make } = MODELS[cursor++ % MODELS.length];
+  const own = userKey.getStore();
+  // A visitor's own key is tried first; the shared pool is the fallback.
+  const pools = own ? [userSlots(own), SHARED] : [SHARED];
+  let lastErr: unknown = new Error("No LLM configured (set LLM_API_KEY)");
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const now = Date.now();
+    const picks = pools.map((p) => pick(p, readyAt, now, cursor));
+    const hit = picks.find((p) => "slot" in p);
+    if (!hit) {
+      const wait = Math.min(...picks.map((p) => ("wait" in p ? p.wait : Infinity)));
+      if (wait > MAX_WAIT)
+        throw new Error(`All LLM keys are rate-limited for ~${Math.ceil(wait / 60000)} min. Add your own free Groq key on the home page, or retry later.`);
+      await sleep(wait);
+      continue;
+    }
+    const { key, id, make, slow } = (hit as { slot: LlmSlot }).slot;
+    cursor++;
     try {
-      const { text } = await generateText({ model: make(id), system, messages, temperature, maxRetries: 0, maxOutputTokens: 3000, providerOptions: optionsFor(id) });
+      const { text } = await generateText({
+        model: make(id), system, messages, temperature, maxRetries: 0, maxOutputTokens: 3000, providerOptions: optionsFor(id),
+        abortSignal: slow ? AbortSignal.timeout(120_000) : undefined,
+      });
       const out = stripThink(text).trim();
       if (out) return out;
       lastErr = new Error(`${id} returned empty text`);
     } catch (e) {
       lastErr = e;
     }
-    console.warn(`[llm] ${id} failed: ${String(lastErr).slice(0, 160)}`);
-    if ((attempt + 1) % MODELS.length === 0) await sleep(8000);
+    // Bench the slot for exactly as long as Groq asks (daily limits can be hours); unknown failures sit out 20s.
+    readyAt.set(key, Date.now() + (parseWait(String(lastErr)) ?? 20_000));
+    console.warn(`[llm] ${key} benched: ${String(lastErr).slice(0, 160)}`);
   }
   throw lastErr;
 }

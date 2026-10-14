@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { parsePeople } from "@/lib/links";
 import { setRun } from "@/lib/store";
-import { isRunning, runPipeline } from "@/lib/pipeline";
+import { isRunning, LLM_KEY, runPipeline } from "@/lib/pipeline";
 import type { Run } from "@/lib/types";
 
 const STEPS = [
@@ -18,7 +18,20 @@ export default function Home() {
   const router = useRouter();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [llmKey, setLlmKey] = useState("");
   const people = parsePeople(text);
+  useEffect(() => {
+    try {
+      setLlmKey(localStorage.getItem(LLM_KEY) ?? "");
+    } catch {}
+  }, []);
+  const saveKey = (k: string) => {
+    setLlmKey(k);
+    try {
+      if (k.trim()) localStorage.setItem(LLM_KEY, k.trim());
+      else localStorage.removeItem(LLM_KEY);
+    } catch {}
+  };
 
   async function start() {
     // Replacing the live run under an in-flight pipeline would orphan its dates.
@@ -67,6 +80,20 @@ export default function Home() {
           {people.length} {people.length === 1 ? "person" : "people"} found. Add at least 2 people so they have someone to date.
           Only public Instagram profiles can be read.
         </div>
+        <label className="label mt-5 block" htmlFor="llm-key">Your own Groq API key (optional)</label>
+        <input
+          id="llm-key"
+          type="password"
+          autoComplete="off"
+          value={llmKey}
+          onChange={(e) => saveKey(e.target.value)}
+          placeholder="gsk_…"
+          className="mt-2 w-full rounded-xl border border-line bg-ink/70 p-3 font-mono text-xs text-cream outline-none focus:border-gold"
+        />
+        <p className="mt-1 text-xs text-mute">
+          Our shared free keys can run out when many people test at once. A free key from console.groq.com makes your run
+          faster and independent. It stays in your browser and is only sent with your own requests.
+        </p>
         <button className="btn mt-5 w-full" disabled={busy || people.length < 2} onClick={start}>
           {busy ? "Starting…" : "Send the agents out"}
         </button>

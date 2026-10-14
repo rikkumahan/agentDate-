@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { json } from "@/lib/llm";
+import { json, withUserKey } from "@/lib/llm";
 import type { Profile } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -11,7 +11,7 @@ const Schema = z.object({
 const card = (p: Profile) =>
   `${p.name} — ${p.headline}. ${p.location}. Interests: ${p.interests.join(", ")}. Hobbies: ${p.hobbies.join(", ")}. Values: ${p.values.join(", ")}. Needs: ${p.needs.join("; ")}`;
 
-export async function POST(req: Request) {
+async function handle(req: Request): Promise<Response> {
   const { me, others, k = 3 } = (await req.json()) as {
     me: Profile;
     others: { id: string; profile: Profile }[];
@@ -42,3 +42,5 @@ JSON: { "picks": [{ "id": string, "reason": string }] }  // exactly ${k}, best f
     return Response.json({ error: String(e) }, { status: 500 });
   }
 }
+
+export const POST = withUserKey(handle);

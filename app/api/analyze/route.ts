@@ -1,4 +1,4 @@
-import { json } from "@/lib/llm";
+import { json, withUserKey } from "@/lib/llm";
 import { ProfileSchema } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -33,7 +33,7 @@ JSON shape:
   "voice": string                     // how this person talks/writes, so you can speak like them on a date
 }`;
 
-export async function POST(req: Request) {
+async function handle(req: Request): Promise<Response> {
   const { linkedin, instagram, links } = await req.json();
   if (!linkedin && !instagram) return Response.json({ error: "No data scraped for this person" }, { status: 422 });
   const prompt = `LinkedIn URL: ${links?.linkedin}\nInstagram URL: ${links?.instagram}
@@ -56,3 +56,5 @@ ${instagram ? JSON.stringify(instagram).slice(0, 6000) : "(not available)"}`;
     return Response.json({ error: String(e) }, { status: 500 });
   }
 }
+
+export const POST = withUserKey(handle);

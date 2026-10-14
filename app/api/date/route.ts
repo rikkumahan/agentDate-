@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ModelMessage } from "ai";
-import { chat, json } from "@/lib/llm";
+import { chat, json, withUserKey } from "@/lib/llm";
 import type { DateEvent, Profile } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -52,7 +52,7 @@ function splitTurn(raw: string) {
   return { thought: "", text: unquote(raw.replace(/^\**\s*THOUGHT.*$/im, "").replace(/^\**\s*SAY\s*\**\s*[:\-—]?\s*\**/i, "")) };
 }
 
-export async function POST(req: Request) {
+async function handle(req: Request): Promise<Response> {
   const { a, b, rounds = 3 } = (await req.json()) as { a: Profile; b: Profile; rounds?: number };
   const enc = new TextEncoder();
 
@@ -112,3 +112,5 @@ JSON: { "score": 0-100 fit for ${first(me)}, "second_date": boolean, "highlights
 
   return new Response(stream, { headers: { "Content-Type": "application/x-ndjson" } });
 }
+
+export const POST = withUserKey(handle);

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { json } from "@/lib/llm";
+import { json, withUserKey } from "@/lib/llm";
 
 export const maxDuration = 120;
 
@@ -15,7 +15,7 @@ self-descriptions ("mom", "dad", "mother", "father", "wife", "husband", "woman",
 Do NOT infer from the first name or photos. If there is no explicit signal, answer "unknown".
 JSON: { "gender": "woman" | "man" | "unknown", "evidence": string (quote the signal, or "none") }`;
 
-export async function POST(req: Request) {
+async function handle(req: Request): Promise<Response> {
   const { linkedin, instagram } = await req.json();
   // Recommendations and pronoun fields carry most of the signal, so send them first and untruncated by the rest.
   const li = linkedin ?? {};
@@ -27,3 +27,5 @@ export async function POST(req: Request) {
     return Response.json({ error: String(e) }, { status: 500 });
   }
 }
+
+export const POST = withUserKey(handle);

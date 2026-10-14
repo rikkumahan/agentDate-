@@ -46,8 +46,18 @@ const log = (msg: string) => update(ID, (r) => void r.log.push(`${new Date().toL
 const person = (r: Run, id: string) => r.people.find((p) => p.id === id)!;
 const nameOf = (p: Person) => p.profile?.name ?? p.id;
 
+// A visitor's own Groq key (saved on the home page) rides along on every API call; it is never stored server-side.
+export const LLM_KEY = "agentdate:llmKey";
+const headers = (): Record<string, string> => {
+  let key: string | null = null;
+  try {
+    key = localStorage.getItem(LLM_KEY);
+  } catch {}
+  return { "Content-Type": "application/json", ...(key ? { "x-llm-key": key } : {}) };
+};
+
 async function post(url: string, body: unknown) {
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(url, { method: "POST", headers: headers(), body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
   return data;
@@ -193,7 +203,7 @@ async function runDate(key: string) {
   const abort = new AbortController();
   ctl.aborts.add(abort);
   try {
-    const res = await fetch("/api/date", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ a: a.profile, b: b.profile }), signal: abort.signal });
+    const res = await fetch("/api/date", { method: "POST", headers: headers(), body: JSON.stringify({ a: a.profile, b: b.profile }), signal: abort.signal });
     if (!res.body) throw new Error(`HTTP ${res.status}`);
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
     let buf = "";
