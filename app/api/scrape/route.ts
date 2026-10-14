@@ -50,8 +50,8 @@ export async function POST(req: Request) {
       notes.push(`Instagram: ${igItem.errorDescription ?? igItem.error}`);
       igItem = undefined;
     } else if (igItem?.private) notes.push("Instagram is private — only the bio is readable");
-    if (!igItem && !notes.length) notes.push("Instagram: no data returned");
-    if (!liItem) notes.push("LinkedIn: no data returned");
+    if (p.instagram && !igItem && !notes.length) notes.push("Instagram: no data returned");
+    if (p.linkedin && !liItem) notes.push("LinkedIn: no data returned");
     return {
       id: p.id,
       linkedin: liItem ? prune(liItem) : null,
