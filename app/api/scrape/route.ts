@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
   const liBatchErrors: string[] = [];
   const [ig, li] = await Promise.allSettled([
-    runActor(process.env.IG_ACTOR || "apify/instagram-profile-scraper", { usernames: handles }),
+    handles.length ? runActor(process.env.IG_ACTOR || "apify/instagram-profile-scraper", { usernames: handles }) : [],
     // Apify free plan caps this actor at 10 items per run, so fan out in parallel batches of 10.
     Promise.all(
       Array.from({ length: Math.ceil(liUrls.length / 10) }, (_, i) => liUrls.slice(i * 10, i * 10 + 10)).map((urls) =>

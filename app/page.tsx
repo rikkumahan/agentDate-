@@ -54,7 +54,7 @@ export default function Home() {
       </section>
 
       <section className="card p-5">
-        <label className="label" htmlFor="links">One person per line: their LinkedIn link, then their Instagram link</label>
+        <label className="label" htmlFor="links">One person per line: their LinkedIn and/or public Instagram link</label>
         <textarea
           id="links"
           value={text}

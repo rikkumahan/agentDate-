@@ -2,6 +2,7 @@ import { liSlug } from "./links.ts";
 
 // Actors don't echo our ids back, so scrape results are matched by handle / slug.
 export function matchInstagram<T extends { username?: unknown }>(items: T[], handle: string) {
+  if (!handle) return undefined;
   return items.find((i) => String(i.username ?? "").toLowerCase() === handle);
 }
 

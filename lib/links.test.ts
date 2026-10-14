@@ -29,15 +29,22 @@ assert.deepStrictEqual(
   [{ linkedin: "https://linkedin.com/in/jane", instagram: "https://instagram.com/jane", id: "jane" }],
 );
 
-// Blank lines, CRLF, and a line missing one URL (dropped).
+// Blank lines, CRLF, and a repeated person with one URL (deduped).
 const text = [`${li} ${ig}`, "", `${li}`, `https://linkedin.com/in/bob ${"https://instagram.com/bob"}`].join("\r\n");
 assert.deepStrictEqual(parsePeople(text).map((p) => p.id), ["jane-doe", "bob"]);
 
-// Empty LinkedIn slug falls back to the Instagram handle as id.
+// Empty LinkedIn slug is ignored; the Instagram handle becomes the id.
 assert.deepStrictEqual(
   parsePeople("https://linkedin.com/in/ https://instagram.com/xo"),
-  [{ linkedin: "https://linkedin.com/in/", instagram: "https://instagram.com/xo", id: "xo" }],
+  [{ linkedin: "", instagram: "https://instagram.com/xo", id: "xo" }],
 );
+
+// A LinkedIn link on its own is enough, with or without https://.
+assert.deepStrictEqual(parsePeople("https://www.linkedin.com/in/nikeshreddyy/"), [
+  { linkedin: "https://www.linkedin.com/in/nikeshreddyy/", instagram: "", id: "nikeshreddyy" },
+]);
+assert.deepStrictEqual(parsePeople("www.linkedin.com/in/sam"), [{ linkedin: "https://www.linkedin.com/in/sam", instagram: "", id: "sam" }]);
+assert.deepStrictEqual(parsePeople("instagram.com/xo"), [{ linkedin: "", instagram: "https://instagram.com/xo", id: "xo" }]);
 
 assert.deepStrictEqual(parsePeople(""), []);
 

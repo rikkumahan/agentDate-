@@ -26,8 +26,8 @@ export default function ProfilePage() {
             <p className="mt-1 text-xs text-mute" title={p.gender.evidence}>Matched man–woman as a {p.gender.gender} (from: {p.gender.evidence})</p>
           )}
           <div className="mt-2 flex gap-3 text-sm">
-            <a href={p.linkedin} target="_blank" rel="noreferrer" className="text-gold hover:underline">LinkedIn ↗</a>
-            <a href={p.instagram} target="_blank" rel="noreferrer" className="text-gold hover:underline">Instagram ↗</a>
+            {p.linkedin && <a href={p.linkedin} target="_blank" rel="noreferrer" className="text-gold hover:underline">LinkedIn ↗</a>}
+            {p.instagram && <a href={p.instagram} target="_blank" rel="noreferrer" className="text-gold hover:underline">Instagram ↗</a>}
           </div>
         </div>
       </div>
