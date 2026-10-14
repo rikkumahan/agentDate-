@@ -29,7 +29,7 @@ export default function DatePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
-        <Link href={`/${id}`} className="text-sm text-mute hover:text-cream">Back to all dates</Link>
+        <Link href={`/${id}#Dates`} className="btn-ghost text-sm">← Back to dashboard</Link>
         {d.status === "done" && (
           <button className="btn-ghost" onClick={() => setUpto(replaying ? undefined : 0)}>
             {replaying ? "Skip to the end" : "Replay the date"}

@@ -16,7 +16,7 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <Link href={`/${id}`} className="text-sm text-mute hover:text-cream">← all people</Link>
+      <Link href={`/${id}#People`} className="btn-ghost inline-block text-sm">← Back to dashboard</Link>
       <div className="flex flex-wrap items-center gap-5">
         <Avatar p={p} size={84} />
         <div className="min-w-0 flex-1">

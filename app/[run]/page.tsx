@@ -15,7 +15,16 @@ const TABS = ["Love map", "People", "Dates", "Rankings"] as const;
 export default function RunPage() {
   const { run: id } = useParams<{ run: string }>();
   const run = useRun(id);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Love map");
+  const [tab, setTabState] = useState<(typeof TABS)[number]>("Love map");
+  // The tab lives in the URL hash so "back to dashboard" from a profile or date lands on the same tab.
+  useEffect(() => {
+    const h = decodeURIComponent(location.hash.slice(1));
+    if ((TABS as readonly string[]).includes(h)) setTabState(h as (typeof TABS)[number]);
+  }, []);
+  const setTab = (t: (typeof TABS)[number]) => {
+    setTabState(t);
+    history.replaceState(null, "", `#${encodeURIComponent(t)}`);
+  };
   // Without public/demo.json the request falls through to this page as HTML.
   const [demoMissing, setDemoMissing] = useState(false);
   useEffect(() => {
@@ -45,6 +54,7 @@ export default function RunPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
+          <Link href="/" className="btn-ghost mb-3 inline-block text-sm">← Home</Link>
           <p className="label">{id === "demo" ? "finished demo" : "your run"}</p>
           <h1 className="font-serif text-4xl">{run.people.length} people, {dates.length} dates</h1>
         </div>

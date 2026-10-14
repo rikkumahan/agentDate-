@@ -5,3 +5,4 @@ Format: [YYYY-MM-DD HH:MM] [tool] [branch] [status] — what / why
 
 [2026-10-14 00:00] [setup] [main] [done] — scaffolded via magent-init
 [2026-10-14 05:00] [claude-code] [main] [done] — demo rebuilt as 25 people, 43/43 dates done, 0 errors (public/demo.json); home page copy changed from 30 to 25 people; deployed to production. Why: the hand-in demo must match the 25 verified people and be fully dated before recording.
+[2026-10-14 05:40] [claude-code] [main] [done] — each paste now starts a fresh run (pasted people + optional demo pool), no longer merged into the previous live run; added "Back to dashboard" buttons that return to the same tab (tab kept in URL hash) and a Home link on the dashboard. Why: people from an earlier paste were dating the new ones, and there was no obvious way back.
