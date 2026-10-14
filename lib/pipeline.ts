@@ -46,14 +46,27 @@ const log = (msg: string) => update(ID, (r) => void r.log.push(`${new Date().toL
 const person = (r: Run, id: string) => r.people.find((p) => p.id === id)!;
 const nameOf = (p: Person) => p.profile?.name ?? p.id;
 
-// A visitor's own Groq key (saved on the home page) rides along on every API call; it is never stored server-side.
-export const LLM_KEY = "agentdate:llmKey";
-const headers = (): Record<string, string> => {
-  let key: string | null = null;
+// A visitor's own OpenAI-compatible provider (saved on the home page) rides along on every API call;
+// it is never stored server-side.
+export type OwnLlm = { baseURL: string; apiKey: string; model: string };
+const LLM_KEY = "agentdate:llm";
+export function loadOwnLlm(): OwnLlm {
   try {
-    key = localStorage.getItem(LLM_KEY);
+    return { baseURL: "", apiKey: "", model: "", ...JSON.parse(localStorage.getItem(LLM_KEY) ?? "{}") };
+  } catch {
+    return { baseURL: "", apiKey: "", model: "" };
+  }
+}
+export function saveOwnLlm(v: OwnLlm) {
+  try {
+    if (v.baseURL || v.apiKey || v.model) localStorage.setItem(LLM_KEY, JSON.stringify(v));
+    else localStorage.removeItem(LLM_KEY);
   } catch {}
-  return { "Content-Type": "application/json", ...(key ? { "x-llm-key": key } : {}) };
+}
+const headers = (): Record<string, string> => {
+  const { baseURL, apiKey, model } = loadOwnLlm();
+  const own: Record<string, string> = baseURL && apiKey && model ? { "x-llm-base": baseURL, "x-llm-key": apiKey, "x-llm-model": model } : {};
+  return { "Content-Type": "application/json", ...own };
 };
 
 async function post(url: string, body: unknown) {

@@ -1,9 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash } from "node:crypto";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, type ModelMessage } from "ai";
 import type { z } from "zod";
 import { extractJson, stripThink } from "@/lib/json";
 import { parseWait, pick } from "@/lib/schedule";
+import { safeBaseUrl } from "@/lib/links";
 
 const BASE_URL = process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1";
 const list = (s?: string) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -23,16 +25,21 @@ if (process.env.LLM2_BASE_URL) {
   for (const id of list(process.env.LLM2_MODELS)) SHARED.push({ key: `llm2:${id}`, id, make, slow: true });
 }
 
-// A visitor's own Groq key (x-llm-key header), scoped to the request that carried it.
-const userKey = new AsyncLocalStorage<string>();
+// A visitor's own OpenAI-compatible provider (x-llm-base / x-llm-key / x-llm-model headers),
+// scoped to the request that carried it.
+type UserLlm = { baseURL: string; apiKey: string; model: string };
+const userLlm = new AsyncLocalStorage<UserLlm | undefined>();
 export const withUserKey =
   (handler: (req: Request) => Promise<Response>) =>
-  (req: Request) =>
-    userKey.run(req.headers.get("x-llm-key")?.trim() ?? "", () => handler(req));
-const userSlots = (apiKey: string): LlmSlot[] => {
-  const make = createOpenAICompatible({ name: "llm", baseURL: BASE_URL, apiKey });
-  return MODEL_IDS.map((id) => ({ key: `user${apiKey.slice(-6)}:${id}`, id, make }));
-};
+  (req: Request) => {
+    const h = (n: string) => req.headers.get(n)?.trim() ?? "";
+    const u = { baseURL: h("x-llm-base"), apiKey: h("x-llm-key"), model: h("x-llm-model") };
+    return userLlm.run(u.apiKey && u.model && safeBaseUrl(u.baseURL) ? u : undefined, () => handler(req));
+  };
+
+const userSlots = ({ baseURL, apiKey, model }: UserLlm): LlmSlot[] => [
+  { key: `user:${new URL(baseURL).host}:${createHash("sha256").update(apiKey).digest("hex").slice(0, 8)}:${model}`, id: model, make: createOpenAICompatible({ name: "llm", baseURL, apiKey }) },
+];
 
 // ponytail: bench times live in this server instance's memory; a cold instance relearns them on its first 429.
 const readyAt = new Map<string, number>();
@@ -46,7 +53,7 @@ const optionsFor = (id: string) => (effort && id.includes("gpt-oss") ? { llm: { 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function chat(system: string, messages: ModelMessage[], temperature = 0.9) {
-  const own = userKey.getStore();
+  const own = userLlm.getStore();
   // A visitor's own key is tried first; the shared pool is the fallback.
   const pools = own ? [userSlots(own), SHARED] : [SHARED];
   let lastErr: unknown = new Error("No LLM configured (set LLM_API_KEY)");
@@ -57,7 +64,7 @@ export async function chat(system: string, messages: ModelMessage[], temperature
     if (!hit) {
       const wait = Math.min(...picks.map((p) => ("wait" in p ? p.wait : Infinity)));
       if (wait > MAX_WAIT)
-        throw new Error(`All LLM keys are rate-limited for ~${Math.ceil(wait / 60000)} min. Add your own free Groq key on the home page, or retry later.`);
+        throw new Error(`All LLM keys are rate-limited for ~${Math.ceil(wait / 60000)} min. Add your own API key on the home page, or retry later.`);
       await sleep(wait);
       continue;
     }

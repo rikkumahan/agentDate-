@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { parsePeople } from "@/lib/links";
+import { parsePeople, safeBaseUrl } from "@/lib/links";
 import { setRun } from "@/lib/store";
-import { isRunning, LLM_KEY, runPipeline } from "@/lib/pipeline";
+import { isRunning, loadOwnLlm, type OwnLlm, runPipeline, saveOwnLlm } from "@/lib/pipeline";
 import type { Run } from "@/lib/types";
 
 const STEPS = [
@@ -14,24 +14,25 @@ const STEPS = [
   ["Rank", "Everyone gets a ranking of who fits them best"],
 ];
 
+const FIELD = "mt-2 w-full rounded-xl border border-line bg-ink/70 p-3 font-mono text-xs text-cream outline-none focus:border-gold";
+
 export default function Home() {
   const router = useRouter();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [llmKey, setLlmKey] = useState("");
+  const [llm, setLlm] = useState<OwnLlm>({ baseURL: "", apiKey: "", model: "" });
   const people = parsePeople(text);
-  useEffect(() => {
-    try {
-      setLlmKey(localStorage.getItem(LLM_KEY) ?? "");
-    } catch {}
-  }, []);
-  const saveKey = (k: string) => {
-    setLlmKey(k);
-    try {
-      if (k.trim()) localStorage.setItem(LLM_KEY, k.trim());
-      else localStorage.removeItem(LLM_KEY);
-    } catch {}
+  useEffect(() => setLlm(loadOwnLlm()), []);
+  const edit = (field: keyof OwnLlm, value: string) => {
+    const next = { ...llm, [field]: value.trim() };
+    setLlm(next);
+    saveOwnLlm(next);
   };
+  // All three or none: a half-filled provider would silently fall back to the shared keys.
+  const filled = [llm.baseURL, llm.apiKey, llm.model].filter(Boolean).length;
+  const llmProblem =
+    filled === 0 ? "" : filled < 3 ? "Fill in all three fields, or clear them to use our shared keys."
+    : !safeBaseUrl(llm.baseURL) ? "The base URL must be a public https address." : "";
 
   async function start() {
     // Replacing the live run under an in-flight pipeline would orphan its dates.
@@ -80,21 +81,32 @@ export default function Home() {
           {people.length} {people.length === 1 ? "person" : "people"} found. Add at least 2 people so they have someone to date.
           Only public Instagram profiles can be read.
         </div>
-        <label className="label mt-5 block" htmlFor="llm-key">Your own Groq API key (optional)</label>
-        <input
-          id="llm-key"
-          type="password"
-          autoComplete="off"
-          value={llmKey}
-          onChange={(e) => saveKey(e.target.value)}
-          placeholder="gsk_…"
-          className="mt-2 w-full rounded-xl border border-line bg-ink/70 p-3 font-mono text-xs text-cream outline-none focus:border-gold"
-        />
-        <p className="mt-1 text-xs text-mute">
-          Our shared free keys can run out when many people test at once. A free key from console.groq.com makes your run
-          faster and independent. It stays in your browser and is only sent with your own requests.
-        </p>
-        <button className="btn mt-5 w-full" disabled={busy || people.length < 2} onClick={start}>
+        <fieldset className="mt-5">
+          <legend className="label">Your own LLM (optional, any OpenAI-compatible API)</legend>
+          <input
+            aria-label="Base URL"
+            list="llm-bases"
+            value={llm.baseURL}
+            onChange={(e) => edit("baseURL", e.target.value)}
+            placeholder="Base URL, e.g. https://api.groq.com/openai/v1"
+            className={FIELD}
+          />
+          <datalist id="llm-bases">
+            <option value="https://api.groq.com/openai/v1">Groq</option>
+            <option value="https://api.openai.com/v1">OpenAI</option>
+            <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+            <option value="https://api.together.xyz/v1">Together</option>
+            <option value="https://api.mistral.ai/v1">Mistral</option>
+            <option value="https://generativelanguage.googleapis.com/v1beta/openai">Google Gemini</option>
+          </datalist>
+          <input aria-label="API key" type="password" autoComplete="off" value={llm.apiKey} onChange={(e) => edit("apiKey", e.target.value)} placeholder="API key" className={FIELD} />
+          <input aria-label="Model" value={llm.model} onChange={(e) => edit("model", e.target.value)} placeholder="Model, e.g. openai/gpt-oss-120b" className={FIELD} />
+          <p className={`mt-1 text-xs ${llmProblem ? "text-blush" : "text-mute"}`}>
+            {llmProblem ||
+              "Our shared free keys can run out when many people test at once. Your own provider is tried first. It stays in your browser and is only sent with your own requests."}
+          </p>
+        </fieldset>
+        <button className="btn mt-5 w-full" disabled={busy || people.length < 2 || !!llmProblem} onClick={start}>
           {busy ? "Starting…" : "Send the agents out"}
         </button>
       </section>
