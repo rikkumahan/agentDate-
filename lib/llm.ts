@@ -12,8 +12,8 @@ type Provider = ReturnType<typeof createOpenAICompatible>;
 type LlmSlot = { key: string; id: string; make: Provider; slow?: boolean };
 
 // Every (key, model) pair is a slot: Groq limits tokens per model per organization, so each pair has its own budget.
-// LLM_API_KEY may hold several comma-separated keys.
-const SHARED: LlmSlot[] = list(process.env.LLM_API_KEY).flatMap((apiKey, k) => {
+// LLM_API_KEY may hold several comma-separated keys; LLM3_API_KEY adds more on the same host.
+const SHARED: LlmSlot[] = list(`${process.env.LLM_API_KEY ?? ""},${process.env.LLM3_API_KEY ?? ""}`).flatMap((apiKey, k) => {
   const make = createOpenAICompatible({ name: "llm", baseURL: BASE_URL, apiKey });
   return MODEL_IDS.map((id) => ({ key: `key${k}:${id}`, id, make }));
 });
