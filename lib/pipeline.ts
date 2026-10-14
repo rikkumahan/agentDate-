@@ -180,10 +180,14 @@ async function pipeline() {
       for (const pick of p.shortlist ?? []) {
         const key = pairKey(p.id, pick.id);
         // "live" here means a date interrupted by a page reload — nothing else can be running.
-        if (!r.dates[key] || r.dates[key].status === "error" || r.dates[key].status === "live") {
+        const old = r.dates[key];
+        if (!old) {
           // Don't split the key: Instagram-handle ids can themselves contain "__".
           const [a, b] = [p.id, pick.id].sort();
           r.dates[key] = { a, b, status: "pending", messages: [], verdicts: {} };
+        } else if (old.status === "error" || old.status === "live") {
+          // Retry continues from the venue and turns already done; only the missing steps are re-run.
+          r.dates[key] = { ...old, status: "pending", verdicts: {}, error: undefined };
         }
       }
   });
@@ -208,11 +212,7 @@ async function runDate(key: string) {
   const d = r.dates[key];
   const a = person(r, d.a), b = person(r, d.b);
   const set = (fn: (d: Run["dates"][string]) => void) => update(ID, (run) => fn(run.dates[key]));
-  set((d) => {
-    d.status = "live";
-    d.messages = [];
-    d.verdicts = {};
-  });
+  set((d) => void (d.status = "live"));
   const abort = new AbortController();
   ctl.aborts.add(abort);
   try {
@@ -251,9 +251,9 @@ async function runDate(key: string) {
     log(`Date finished: ${nameOf(a)} × ${nameOf(b)}`);
   } catch (e) {
     if (abort.signal.aborted) {
+      // Paused: keep what was said so Resume continues the same date.
       set((d) => {
         d.status = "pending";
-        d.messages = [];
         d.verdicts = {};
       });
       return;
