@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parsePeople } from "@/lib/links";
-import { loadRun, setRun } from "@/lib/store";
+import { setRun } from "@/lib/store";
 import { isRunning, runPipeline } from "@/lib/pipeline";
 import type { Run } from "@/lib/types";
 
@@ -17,7 +17,6 @@ const STEPS = [
 export default function Home() {
   const router = useRouter();
   const [text, setText] = useState("");
-  const [joinDemo, setJoinDemo] = useState(true);
   const [busy, setBusy] = useState(false);
   const people = parsePeople(text);
 
@@ -25,18 +24,8 @@ export default function Home() {
     // Replacing the live run under an in-flight pipeline would orphan its dates.
     if (isRunning()) return router.push("/live");
     setBusy(true);
-    // Every paste starts a fresh run: only these people, plus the demo pool if asked (its dates are kept).
-    // An earlier run's people are not carried over, so they never date the new ones.
-    const base = joinDemo ? await loadRun("demo") : undefined;
-    const existing = new Set(base?.people.map((p) => p.id));
-    const fresh = people.filter((p) => !existing.has(p.id));
-    const run: Run = {
-      id: "live",
-      stage: "idle",
-      people: [...(base ? structuredClone(base.people) : []), ...fresh],
-      dates: base ? structuredClone(base.dates) : {},
-      log: [base ? `Added ${fresh.length} people to the demo pool of ${base.people.length}.` : "New pool."],
-    };
+    // Every paste starts a fresh run with only these people; earlier runs never mix in.
+    const run: Run = { id: "live", stage: "idle", people, dates: {}, log: [`New pool of ${people.length} people.`] };
     setRun(run);
     router.push("/live");
     runPipeline();
@@ -75,13 +64,10 @@ export default function Home() {
           className="mt-2 w-full resize-y rounded-xl border border-line bg-ink/70 p-3 font-mono text-xs text-cream outline-none focus:border-gold"
         />
         <div className="mt-2 text-xs text-mute">
-          {people.length} {people.length === 1 ? "person" : "people"} found. Only public Instagram profiles can be read.
+          {people.length} {people.length === 1 ? "person" : "people"} found. Add at least 2 people so they have someone to date.
+          Only public Instagram profiles can be read.
         </div>
-        <label className="mt-4 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={joinDemo} onChange={(e) => setJoinDemo(e.target.checked)} className="accent-[#f2c46d]" />
-          Add them to the demo pool (so they have 25 people to date)
-        </label>
-        <button className="btn mt-5 w-full" disabled={busy || !people.length || (!joinDemo && people.length < 2)} onClick={start}>
+        <button className="btn mt-5 w-full" disabled={busy || people.length < 2} onClick={start}>
           {busy ? "Starting…" : "Send the agents out"}
         </button>
       </section>
