@@ -8,7 +8,7 @@ export const maxDuration = 300;
 const apify = new ApifyClient({ token: process.env.APIFY_TOKEN });
 
 async function runActor(actor: string, input: object) {
-  const run = await apify.actor(actor).call(input, { waitSecs: 280 });
+  const run = await apify.actor(actor).call(input, { waitSecs: 240 });
   // call() resolves (not throws) on timeout/failure — surface that instead of "nothing scraped".
   if (run.status !== "SUCCEEDED") throw new Error(`${actor} run ${run.status} (${run.id})`);
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();

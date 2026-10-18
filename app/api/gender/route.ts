@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { json, withUserKey } from "@/lib/llm";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const Schema = z.object({
   gender: z.enum(["woman", "man", "unknown"]).catch("unknown"),

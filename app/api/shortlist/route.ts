@@ -2,7 +2,7 @@ import { z } from "zod";
 import { json, withUserKey } from "@/lib/llm";
 import type { Profile } from "@/lib/types";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const Schema = z.object({
   picks: z.array(z.object({ id: z.string(), reason: z.string().catch("") })).catch([]),
